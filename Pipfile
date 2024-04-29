@@ -9,6 +9,13 @@ pandas = "*"
 requests = "*"
 python-docx = "*"
 notebook = "==7.1.2"
+transformers = "*"
+accelerate = "*"
+bitsandbytes = "*"
+bitsandbytes-cuda116 = "*"
+openai = "*"
+tqdm = "*"
+elasticsearch = "*"
 
 [dev-packages]
 
