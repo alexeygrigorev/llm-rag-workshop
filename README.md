@@ -1,23 +1,55 @@
-# llm-rag-workshop
+# LLM RAG Workshop
+
 Chat with your own data - LLM+RAG workshop
 
 You need: 
 
 - Docker
 - Python 3.10
-- OpenAI account and/or HuggingFace account
+- OpenAI account
+- Optionally, a GitHub account
 
 
+# LLM and RAG
 
-# preparing the env 
+I generated that with ChatGPT:
 
-using codespaces - but will work anywhere 
+## Large Language Models (LLMs)
+- **Purpose:** Generate and understand text in a human-like manner.
+- **Structure:** Built using deep learning techniques, especially Transformer architectures.
+- **Size:** Characterized by having a vast number of parameters (billions to trillions), enabling nuanced understanding and generation.
+- **Training:** Pre-trained on large datasets of text to learn a broad understanding of language, then fine-tuned for specific tasks.
+- **Applications:** Used in chatbots, translation services, content creation, and more.
 
-* crete a repo
-* copy the rest from another workshop
+## Retrieval-Augmented Generation (RAG)
+- **Purpose:** Enhance language model responses with information retrieved from external sources.
+- **How It Works:** Combines a language model with a retrieval system, typically a document database or search engine.
+- **Process:** 
+  - Queries an external knowledge source based on input.
+  - Integrates retrieved information into the generation process to provide contextually rich and accurate responses.
+- **Advantages:** Improves the factual accuracy and relevance of generated text.
+- **Use Cases:** Fact-checking, knowledge-intensive tasks like medical diagnosis assistance, and detailed content creation where accuracy is crucial.
+
+Use ChatGPT to show the difference between generating and RAG.
 
 
-Install pipenv 
+What we will do: 
+
+* Index Zoomcamp FAQ documents
+    * DE Zoomcamp: https://docs.google.com/document/d/19bnYs80DwuUimHM65UV3sylsCn2j1vziPOwzBwQrebw/edit
+    * ML Zoomcamp: https://docs.google.com/document/d/1LpPanc33QJJ6BSsyxVg-pWNMplal84TdZtq10naIhD8/edit
+    * MLOps Zoomcamp: https://docs.google.com/document/d/12TlBfhIiKtyBv8RnsoJR6F72bkPDGEvPOItJIxaEzE0/edit
+* Create a Q&A system for answering questions about these documents 
+
+
+# Preparing the Environment 
+
+We will use codespaces - but it will work anywhere 
+
+* Create a repository, e.g. "llm-zoomcamp-rag-workshop"
+* Start a codespace there
+
+We will use pipenv for dependency management. Let's install it: 
 
 ```bash
 pip install pipenv
@@ -26,7 +58,7 @@ pip install pipenv
 Install the packages
 
 ```bash
-pipenv install (content from pipfile)
+pipenv install tqdm notebook==7.1.2 openai elasticsearch
 ```
 
 If you use OpenAI, let's put the key to an env variable:
@@ -35,13 +67,41 @@ If you use OpenAI, let's put the key to an env variable:
 export OPENAI_API_KEY="TOKEN"
 ```
 
-Run jupyter (in the same terminal where you run the previous command so it can access the token)
+Getting the key
+
+* Sign up at https://platform.openai.com/ if you don't have an account
+* Go to https://platform.openai.com/api-keys
+* Create a new key, copy it 
+
+
+To manage keys, we can use direnv:
+
+```bash
+sudo apt update
+sudo apt install direnv 
+direnv hook bash >> ~/.bashrc
+```
+
+Edit `.evnrc`:
+
+```bash
+export OPENAI_API_KEY='sk-proj-key'
+```
+
+Allow direnv to run:
+
+```bash
+direnv allow
+```
+
+Start a new terminal, and there run jupyter:
+
 
 ```bash
 pipenv run jupyter notebook
 ```
 
-Run elasticsearch with docker
+In another terminal, run elasticsearch with docker:
 
 ```bash
 docker run -it \
@@ -51,10 +111,9 @@ docker run -it \
     -e "discovery.type=single-node" \
     -e "xpack.security.enabled=false" \
     docker.elastic.co/elasticsearch/elasticsearch:8.4.3
-
 ```
 
-Verify that ES is runnign
+Verify that ES is running
 
 ```bash
 curl http://localhost:9200
@@ -82,19 +141,19 @@ You should get something like this:
 }
 ```
 
-Install ES client
+# Retrieval
 
-```bash
-pipenv install elasticsearch
-```
-
+RAG consists of multiple components, and the first is R - "retrieval". For retrieval, we need a search system. In our example, we will use elasticsearch for searching. 
 
 ## Searching in the documents
 
-Create a nootebook
+Create a nootebook "elastic-rag" or something like that. We will use it for our experiments
 
+First, we need to download the docs:
 
-
+```bash
+wget https://github.com/alexeygrigorev/llm-rag-workshop/raw/main/notebooks/documents.json
+```
 
 Let's load the documents
 
@@ -125,9 +184,9 @@ es = Elasticsearch("http://localhost:9200")
 es.info()
 ```
 
-You should see the same response as earlier with curl
+You should see the same response as earlier with `curl`.
 
-Create index (like table in "usual" databases):
+Before we can index the documents, we need to create an index (an index in elasticsearch is like a table in a "usual" databases):
 
 ```python
 index_settings = {
@@ -151,7 +210,7 @@ response = es.indices.create(index=index_name, body=index_settings)
 response
 ```
 
-And index the documents:
+Now we're ready to index all the documents:
 
 ```python
 from tqdm.auto import tqdm
@@ -161,8 +220,7 @@ for doc in tqdm(documents):
 ```
 
 
-
-# Retrieving the docs
+## Retrieving the docs
 
 ```python
 user_question = "How do I join the course after it has started?"
@@ -188,11 +246,14 @@ search_query = {
 }
 ```
 
-TODO: explain the query
+This query:
 
+* Retrieves top 5 matching documents.
+* Searches in the "question", "text", "section" fields, prioritizing "question".
+* Matches user query "How do I join the course after it has started?".
+* Shows results only for the "data-engineering-zoomcamp" course.
 
-Show the output:
-
+Let's see the output:
 
 ```python
 response = es.search(index=index_name, body=search_query)
@@ -202,7 +263,9 @@ for hit in response['hits']['hits']:
     print(f"Section: {doc['section']}\nQuestion: {doc['question']}\nAnswer: {doc['text']}\n\n")
 ```
 
-Clean a little
+## Cleaning it
+
+We can make it cleaner by putting it into a function:
 
 ```python
 def retrieve_documents(query, index_name="course-questions", max_results=5):
@@ -244,24 +307,15 @@ for doc in response:
     print(f"Section: {doc['section']}\nQuestion: {doc['question']}\nAnswer: {doc['text']}\n\n")
 ```
 
-# Answering questions
+# Generation - Answering questions
 
+Now let's do the "G" part - generation based on the "R" output
 
+## OpenAI
 
-## With OpenAI
+Today we will use OpenAI (it's the easiest to get started with). In the course, we will learn how to use open-source models 
 
-
-Make sure we have the SDK installed:
-
-```bash
-pipenv install openai
-```
-
-Also we need to set the `OPENAI_API_KEY` variable before launching Jupyter
-
-```bash
-export OPENAI_API_KEY="YOUR_KEY"
-```
+Make sure we have the SDK installed and the key is set.
 
 This is how we communicate with ChatGPT3.5:
 
@@ -277,6 +331,7 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
+## Building a Prompt
 
 Now let's build a prompt. First, we put all the 
 documents together in one string:
@@ -295,8 +350,9 @@ context = context.strip()
 print(context)
 ```
 
-Now build an actual prompt:
+Now build the actual prompt:
 
+```python
 prompt = f"""
 You're a course teaching assistant. Answer the user QUESTION based on CONTEXT - the documents retrieved from our FAQ database. 
 Only use the facts from the CONTEXT. If the CONTEXT doesn't contan the answer, return "NONE"
@@ -307,8 +363,9 @@ CONTEXT:
 
 {context}
 """.strip()
+```
 
-Let's query OpenAI:
+Now we can put it to OpenAI API:
 
 ```python
 response = client.chat.completions.create(
@@ -319,7 +376,9 @@ answer = response.choices[0].message.content
 answer
 ```
 
-TODO: add system and user prompts
+Note: there are system and user prompts, we can also experiment with them to make the design of the prompt cleaner.
+
+## Cleaning
 
 Now let's put everything together in one function:
 
@@ -375,34 +434,10 @@ qa_bot("I can't connect to postgres port 5432, my password doesn't work")
 qa_bot("how can I run kafka?")
 ```
 
-## With Open-Source 
 
-If we can't use OpenAI, we can replace it with a self-hosted 
-open-source LLM. 
+# What's next
 
-The best place to find these models is the HuggingFace hub. 
+* Use Open-Souce
+* Build an interface, e.g. streamlit
+* Deploy it
 
-Examples of models:
-
-* `mistralai/Mistral-7B-v0.1`
-* `HuggingFaceH4/zephyr-7b-alpha`
-* `microsoft/DialoGPT-medium`
-* `microsoft/Phi-3-mini-128k-instruct`
-* and [many more](https://huggingface.co/models?other=LLM) - also see the [leaderboard](https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard)
-
-A good getting started tutorial (if you have a GPU): https://huggingface.co/docs/transformers/en/llm_tutorial
-
-
-
-
-
-If you have a GPU
-
-If you don't have a GPU
-
-...
-
-
-# Interface 
-
-Streamlit
