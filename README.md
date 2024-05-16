@@ -82,7 +82,7 @@ sudo apt install direnv
 direnv hook bash >> ~/.bashrc
 ```
 
-Edit `.evnrc`:
+Create / edit `.envrc` in your project directory:
 
 ```bash
 export OPENAI_API_KEY='sk-proj-key'
