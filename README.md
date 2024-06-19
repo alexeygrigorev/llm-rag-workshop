@@ -2,12 +2,33 @@
 
 Chat with your own data - LLM+RAG workshop
 
-You need: 
+The content here is a part of [LLM Zoomcamp](https://github.com/DataTalksClub/llm-zoomcamp) - a free course about the engineering aspects of LLMs.
+
+For this workshop, you need:
 
 - Docker
 - Python 3.10
 - OpenAI account
 - Optionally, a GitHub account
+- Optionally, a HuggingFace account
+
+# Plan
+
+Original workshop:
+
+* LLM and RAG (theory)
+* Preparing the environment (codespaces)
+    * Installing pipenv and direnv
+    * Running ElasticSearch
+* Indexing and retrieving documents with ElasticSearch
+* Generating the answers with OpenAI
+
+Extended workshop:
+
+* Replacing OpenAI with Ollama
+* Running Ollama and ElasticSearch in Docker-Compose
+* Creating a web interface with Streamlit
+* Using Open-Source LLMs from HuggingFace Hub
 
 
 # LLM and RAG
@@ -105,6 +126,7 @@ In another terminal, run elasticsearch with docker:
 
 ```bash
 docker run -it \
+    --rm \
     --name elasticsearch \
     -p 9200:9200 \
     -p 9300:9300 \
@@ -440,4 +462,23 @@ qa_bot("how can I run kafka?")
 * Use Open-Souce
 * Build an interface, e.g. streamlit
 * Deploy it
+
+# Extended version
+
+For an extended version of this workshop, we will
+
+* Experiment with open-source LLMs and replace OpenAI
+* Build a UI with streamlit
+
+# Open-Source LLMs
+
+There are many open-source LLMs. We will use two platforms:
+
+* Ollama for running on CPU
+* HuggingFace for running on GPU
+
+## Ollama
+
+[Ollama]()
+
 
