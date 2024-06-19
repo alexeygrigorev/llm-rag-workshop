@@ -130,7 +130,6 @@ In another terminal, run elasticsearch with docker:
 docker run -it \
     --rm \
     --name elasticsearch \
-    --rm \
     -p 9200:9200 \
     -p 9300:9300 \
     -e "discovery.type=single-node" \
@@ -275,7 +274,7 @@ search_query = {
 This query:
 
 * Retrieves top 5 matching documents.
-* Searches in the "question", "text", "section" fields, prioritizing "question".
+* Searches in the "question", "text", "section" fields, prioritizing "question" using `multi_match` query with type `best_fields` (see [here](https://github.com/DataTalksClub/llm-zoomcamp/blob/main/01-intro/elastic-search.md) for more information)
 * Matches user query "How do I join the course after it has started?".
 * Shows results only for the "data-engineering-zoomcamp" course.
 
@@ -286,7 +285,9 @@ response = es.search(index=index_name, body=search_query)
 
 for hit in response['hits']['hits']:
     doc = hit['_source']
-    print(f"Section: {doc['section']}\nQuestion: {doc['question']}\nAnswer: {doc['text']}\n\n")
+    print(f"Section: {doc['section']}")
+    print(f"Question: {doc['question']}")
+    print(f"Answer: {doc['text'][:60]}...\n")
 ```
 
 ## Cleaning it
@@ -330,7 +331,9 @@ user_question = "How do I join the course after it has started?"
 response = retrieve_documents(user_question)
 
 for doc in response:
-    print(f"Section: {doc['section']}\nQuestion: {doc['question']}\nAnswer: {doc['text']}\n\n")
+    print(f"Section: {doc['section']}")
+    print(f"Question: {doc['question']}")
+    print(f"Answer: {doc['text'][:60]}...\n")
 ```
 
 # Generation - Answering questions
@@ -348,11 +351,13 @@ This is how we communicate with ChatGPT3.5:
 ```python
 from openai import OpenAI
 
+from openai import OpenAI
+
 client = OpenAI()
 
 response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=[{"role": "user", "content": "What's the formula for Energy?"}]
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "The course already started. Can I still join?"}]
 )
 print(response.choices[0].message.content)
 ```
@@ -364,15 +369,21 @@ documents together in one string:
 
 
 ```python
+context_template = """
+Section: {section}
+Question: {question}
+Answer: {text}
+""".strip()
+
 context_docs = retrieve_documents(user_question)
 
-context = ""
+context_result = ""
 
 for doc in context_docs:
-    doc_str = f"Section: {doc['section']}\nQuestion: {doc['question']}\nAnswer: {doc['text']}\n\n"
-    context += doc_str
+    doc_str = context_template.format(**doc)
+    context_result += ("\n\n" + doc_str)
 
-context = context.strip()
+context = context_result.strip()
 print(context)
 ```
 
@@ -395,7 +406,7 @@ Now we can put it to OpenAI API:
 
 ```python
 response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
+    model="gpt-4o",
     messages=[{"role": "user", "content": prompt}]
 )
 answer = response.choices[0].message.content
@@ -410,20 +421,13 @@ Now let's put everything together in one function:
 
 
 ```python
-def build_context(documents):
-    context = ""
+context_template = """
+Section: {section}
+Question: {question}
+Answer: {text}
+""".strip()
 
-    for doc in documents:
-        doc_str = f"Section: {doc['section']}\nQuestion: {doc['question']}\nAnswer: {doc['text']}\n\n"
-        context += doc_str
-    
-    context = context.strip()
-    return context
-
-
-def build_prompt(user_question, documents):
-    context = build_context(documents)
-    return f"""
+prompt_template = """
 You're a course teaching assistant.
 Answer the user QUESTION based on CONTEXT - the documents retrieved from our FAQ database.
 Don't use other information outside of the provided CONTEXT.  
@@ -435,9 +439,28 @@ CONTEXT:
 {context}
 """.strip()
 
-def ask_openai(prompt, model="gpt-3.5-turbo"):
+
+def build_context(documents):
+    context_result = ""
+    
+    for doc in documents:
+        doc_str = context_template.format(**doc)
+        context_result += ("\n\n" + doc_str)
+    
+    return context_result.strip()
+
+
+def build_prompt(user_question, documents):
+    context = build_context(documents)
+    prompt = prompt_template.format(
+        user_question=user_question,
+        context=context
+    )
+    return prompt
+
+def ask_openai(prompt, model="gpt-4o"):
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model=model,
         messages=[{"role": "user", "content": prompt}]
     )
     answer = response.choices[0].message.content
@@ -450,13 +473,17 @@ def qa_bot(user_question):
     return answer
 ```
 
-Now we can ask it:
+Now we can ask it different questions
 
 ```python
 qa_bot("I'm getting invalid reference format: repository name must be lowercase")
+```
 
+```python
 qa_bot("I can't connect to postgres port 5432, my password doesn't work")
+```
 
+```python
 qa_bot("how can I run kafka?")
 ```
 
@@ -471,8 +498,75 @@ qa_bot("how can I run kafka?")
 
 For an extended version of this workshop, we will
 
-* Experiment with open-source LLMs and replace OpenAI
 * Build a UI with streamlit
+* Experiment with open-source LLMs and replace OpenAI
+
+# Streamlit UI
+
+We can build simple UI apps with streamlit. Let's install it
+
+```bash
+pipenv install streamlit
+```
+
+If you want to learn more about streamlit, you can
+use [this material](https://github.com/DataTalksClub/project-of-the-week/blob/main/2022-08-14-frontend.md).
+
+
+We need a simple form with
+
+* Input box for the prompt
+* Button
+* Text field to display the response (in markdown)
+
+```python
+import streamlit as st
+
+def qa_bot(prompt):
+    import time
+    time.sleep(2)
+    return f"Response for the prompt: {prompt}"
+
+def main():
+    st.title("DTC Q&A System")
+
+    with st.form(key='rag_form'):
+        prompt = st.text_input("Enter your prompt")
+        response_placeholder = st.empty()
+        submit_button = st.form_submit_button(label='Submit')
+
+    if submit_button:
+        response_placeholder.markdown("Loading...")
+        response = qa_bot(prompt)
+        response_placeholder.markdown(response)
+
+if __name__ == "__main__":
+    main()
+```
+
+Let's run it
+
+```bash
+streamlit run app.py
+```
+
+Now we can replace the function `qa_bot`. Let's create 
+a file `rag.py` with the content from the notebook.
+
+You can see the content of the file [here](rag.py).
+
+Also, we add a special dropdown menu to select the course:
+
+```python
+courses = [
+    "data-engineering-zoomcamp",
+    "machine-learning-zoomcamp",
+    "mlops-zoomcamp"
+]
+zoomcamp_option = st.selectbox("Select a zoomcamp", courses)
+```
+
+
 
 # Open-Source LLMs
 
