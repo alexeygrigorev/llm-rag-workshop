@@ -109,6 +109,8 @@ Create / edit `.envrc` in your project directory:
 export OPENAI_API_KEY='sk-proj-key'
 ```
 
+Make sure `.envrc` is in your `.gitignore` - never commit it!
+
 Allow direnv to run:
 
 ```bash
@@ -128,6 +130,7 @@ In another terminal, run elasticsearch with docker:
 docker run -it \
     --rm \
     --name elasticsearch \
+    --rm \
     -p 9200:9200 \
     -p 9300:9300 \
     -e "discovery.type=single-node" \
@@ -240,6 +243,7 @@ from tqdm.auto import tqdm
 for doc in tqdm(documents):
     es.index(index=index_name, document=doc)
 ```
+
 
 
 ## Retrieving the docs
