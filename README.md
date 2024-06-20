@@ -363,8 +363,6 @@ This is how we communicate with ChatGPT3.5:
 ```python
 from openai import OpenAI
 
-from openai import OpenAI
-
 client = OpenAI()
 
 response = client.chat.completions.create(
@@ -708,3 +706,198 @@ for now.
 
 In Colab, you need to enable GPU:
 
+* Create a notebook: https://colab.research.google.com/#create=true
+* Runtime -> Change runtime type -> T4 GPU
+*  `!nvidia-smi` to verify you have a GPU
+
+Now we need to install the dependencies:
+
+```
+!pip install -U transformers accelerate bitsandbytes
+```
+
+Also, it's tricky to run Elasticsearch on Colab, so we will replace
+it with [minsearch](https://github.com/alexeygrigorev/minsearch) - a simple in-memory search library:
+
+```
+!wget https://raw.githubusercontent.com/alexeygrigorev/minsearch/main/minsearch.py
+```
+
+Let's get the data and create an index:
+
+```python
+import requests
+
+docs_url = 'https://github.com/alexeygrigorev/llm-rag-workshop/raw/main/notebooks/documents.json'
+docs_response = requests.get(docs_url)
+documents_raw = docs_response.json()
+
+documents = []
+
+for course in documents_raw:
+    course_name = course['course']
+
+    for doc in course['documents']:
+        doc['course'] = course_name
+        documents.append(doc)
+
+
+import minsearch
+
+index = minsearch.Index(
+    text_fields=["question", "text", "section"],
+    keyword_fields=["course"]
+)
+
+index.fit(documents)
+```
+
+Searching with minsearch:
+
+```python
+query = "I just discovered the course, can I still join?"
+
+filter_dict = {"course": "data-engineering-zoomcamp"}
+boost_dict = {"question": 3}
+
+index.search(query, filter_dict, boost_dict, num_results=5)
+```
+
+Let's replace our search function: 
+
+```python
+def retrieve_documents(query, max_results=5):
+    filter_dict = {"course": "data-engineering-zoomcamp"}
+    boost_dict = {"question": 3}
+
+    return index.search(query, filter_dict, boost_dict, num_results=5)
+```
+
+We will use Google's FLAN T5 model: [`google/flan-t5-xl`](https://huggingface.co/google/flan-t5-xl). 
+
+Downloading and loading it:
+
+
+```python
+from transformers import T5ForConditionalGeneration, T5Tokenizer
+
+model_name = "google/flan-t5-xl"
+
+model = T5ForConditionalGeneration.from_pretrained(model_name, device_map="auto")
+tokenizer = T5Tokenizer.from_pretrained(model_name, legacy=False)
+tokenizer.model_max_length = 4096
+```
+
+Using it: 
+
+```python
+input_text = "translate English to German: How old are you?"
+input_ids = tokenizer(input_text, return_tensors="pt").input_ids.to("cuda")
+
+outputs = model.generate(input_ids)
+print(tokenizer.decode(outputs[0]))
+```
+
+Let's put it to a function:
+
+```python
+def llm(prompt):
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to("cuda")
+    outputs = model.generate(input_ids, )
+    result = tokenizer.decode(outputs[0])
+    return result
+```
+
+Everything together:
+
+```python
+context_template = """
+Section: {section}
+Question: {question}
+Answer: {text}
+""".strip()
+
+prompt_template = """
+You're a course teaching assistant.
+Answer the user QUESTION based on CONTEXT - the documents retrieved from our FAQ database.
+Don't use other information outside of the provided CONTEXT.  
+
+QUESTION: {user_question}
+
+CONTEXT:
+
+{context}
+""".strip()
+
+
+def build_context(documents):
+    context_result = ""
+    
+    for doc in documents:
+        doc_str = context_template.format(**doc)
+        context_result += ("\n\n" + doc_str)
+    
+    return context_result.strip()
+
+
+def build_prompt(user_question, documents):
+    context = build_context(documents)
+    prompt = prompt_template.format(
+        user_question=user_question,
+        context=context
+    )
+    return prompt
+
+
+def qa_bot(user_question):
+    context_docs = retrieve_documents(user_question)
+    prompt = build_prompt(user_question, context_docs)
+    answer = llm(prompt)
+    return answer
+```
+
+Making the answers longer:
+
+```python
+def llm(prompt, generate_params=None):
+    if generate_params is None:
+        generate_params = {}
+
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to("cuda")
+    outputs = model.generate(
+        input_ids,
+        max_length=generate_params.get("max_length", 100),
+        num_beams=generate_params.get("num_beams", 5),
+        do_sample=generate_params.get("do_sample", False),
+        temperature=generate_params.get("temperature", 1.0),
+        top_k=generate_params.get("top_k", 50),
+        top_p=generate_params.get("top_p", 0.95),
+    )
+    result = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return result
+```
+
+Explanation of the parameters:
+
+* `max_length`: Set this to a higher value if you want longer responses. For example, `max_length=300`.
+* `num_beams`: Increasing this can lead to more thorough exploration of possible sequences. Typical values are between 5 and 10.
+* `do_sample`: Set this to `True` to use sampling methods. This can produce more diverse responses.
+* `temperature`: Lowering this value makes the model more confident and deterministic, while higher values increase diversity. Typical values range from 0.7 to 1.5.
+* `top_k` and `top_p`: These parameters control nucleus sampling. `top_k` limits the sampling pool to the top `k` tokens, while `top_p` uses cumulative probability to cut off the sampling pool. Adjust these based on the desired level of randomness.
+
+
+Final notebook:
+
+* [notebooks/google_flan_t5.ipynb](notebooks/google_flan_t5.ipynb)
+* [On Colab](https://colab.research.google.com/drive/1ldGq6PJw5_vIEWFcxZsNlxX6IJR-rWPk?usp=sharing)
+
+Other models:
+
+* `microsoft/Phi-3-mini-128k-instruct`
+* `mistralai/Mistral-7B-v0.1`
+* And many more
+
+
+# Conclusions
+
+That was fun - thanks!
