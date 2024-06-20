@@ -2,19 +2,22 @@
 
 Chat with your own data - LLM+RAG workshop
 
-The content here is a part of [LLM Zoomcamp](https://github.com/DataTalksClub/llm-zoomcamp) - a free course about the engineering aspects of LLMs.
+The content here is based on [LLM Zoomcamp](https://github.com/DataTalksClub/llm-zoomcamp) - a free course about the engineering aspects of LLMs. The course just started, you can still enroll. 
+
+If you want to run a similar workshop in your company, contact
+me at alexey@datatalks.club.
+
 
 For this workshop, you need:
 
 - Docker
-- Python 3.10
-- OpenAI account
-- Optionally, a GitHub account
-- Optionally, a HuggingFace account
+- Python 3 (we use 3.10)
+- OpenAI account (optional)
+- GitHub account (optional)
+- HuggingFace account (optional)
+
 
 # Plan
-
-Original workshop:
 
 * LLM and RAG (theory)
 * Preparing the environment (codespaces)
@@ -25,9 +28,10 @@ Original workshop:
 
 Extended workshop:
 
-* Replacing OpenAI with Ollama
-* Running Ollama and ElasticSearch in Docker-Compose
 * Creating a web interface with Streamlit
+* Running LLMs locally
+    * Replacing OpenAI with Ollama
+    * Running Ollama and ElasticSearch in Docker-Compose
 * Using Open-Source LLMs from HuggingFace Hub
 
 
@@ -65,37 +69,41 @@ What we will do:
 
 # Preparing the Environment 
 
-We will use codespaces - but it will work anywhere 
+We will use codespaces - but it will work in any environment with Docker and Python 3
+
+In codespaces:
 
 * Create a repository, e.g. "llm-zoomcamp-rag-workshop"
 * Start a codespace there
 
-We will use pipenv for dependency management. Let's install it: 
+We will use pipenv for dependency management. It's optional but strongly recommended if you're doing the workshop locally, and not on codespaces.
+
+Let's install it: 
 
 ```bash
 pip install pipenv
 ```
 
-Install the packages
+Install the packages:
 
 ```bash
 pipenv install tqdm notebook==7.1.2 openai elasticsearch
 ```
 
-If you use OpenAI, let's put the key to an env variable:
-
-```bash
-export OPENAI_API_KEY="TOKEN"
-```
-
-Getting the key
+If you use OpenAI, we need the key:
 
 * Sign up at https://platform.openai.com/ if you don't have an account
 * Go to https://platform.openai.com/api-keys
 * Create a new key, copy it 
 
+Let's put the key to an env variable:
 
-To manage keys, we can use direnv:
+
+```bash
+export OPENAI_API_KEY="TOKEN"
+```
+
+But a better way for managing keys is using direnv:
 
 ```bash
 sudo apt update
@@ -110,6 +118,10 @@ export OPENAI_API_KEY='sk-proj-key'
 ```
 
 Make sure `.envrc` is in your `.gitignore` - never commit it!
+
+```bash
+echo ".envrc" >> .gitignore
+```
 
 Allow direnv to run:
 
@@ -567,7 +579,6 @@ zoomcamp_option = st.selectbox("Select a zoomcamp", courses)
 ```
 
 
-
 # Open-Source LLMs
 
 There are many open-source LLMs. We will use two platforms:
@@ -577,6 +588,123 @@ There are many open-source LLMs. We will use two platforms:
 
 ## Ollama
 
-[Ollama]()
+The easiest way to run an LLM without a GPU is using [Ollama](https://github.com/ollama/ollama)
 
+Note that the 2 core codespaces instance is not enough.
+For this part it's better to create a separate instance
+with 4 cores. 
+
+You can also run it locally. I have 8 cores on my laptop,
+so it's faster than doing it on codespaces.
+
+
+Installing for Linux:
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+Installing for other OS - check the [Ollama website](https://www.ollama.com/download). I successfully tested it on Windows too.
+
+Let's run it:
+
+```bash
+ollama start
+ollama serve phi3
+```
+
+Prompt example:
+
+```
+Question: I just discovered the couse. can i still enrol
+
+Context:
+
+Course - Can I still join the course after the start date? Yes, even if you don't register, you're still eligible to submit the homeworks. Be aware, however, that there will be deadlines for turning in the final projects. So don't leave everything for the last minute.
+
+Environment - Is Python 3.9 still the recommended version to use in 2024? Yes, for simplicity (of troubleshooting against the recorded videos) and stability. [source] But Python 3.10 and 3.11 should work fine.
+
+How can we contribute to the course? Star the repo! Share it with friends if you find it useful ❣️ Create a PR if you see you can improve the text or the structure of the repository.
+
+Answer:
+```
+
+Ollama's API is compatible with OpenAI's python client, so
+we can use it by changing only a few lines of code:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url='http://localhost:11434/v1/',
+    api_key='ollama',
+)
+
+response = client.chat.completions.create(
+    model='phi3',
+    messages=[{"role": "user", "content": prompt}]
+)
+    
+response.choices[0].message.content
+```
+
+That's it! Now let's put everything in Docker
+
+## Ollama + Elastic in Docker
+
+We already know how to run Elasticsearch in Docker:
+
+```bash
+docker run -it \
+    --rm \
+    --name elasticsearch \
+    -p 9200:9200 \
+    -p 9300:9300 \
+    -e "discovery.type=single-node" \
+    -e "xpack.security.enabled=false" \
+    docker.elastic.co/elasticsearch/elasticsearch:8.4.3
+```
+
+[This is how we run Ollama in Docker](https://hub.docker.com/r/ollama/ollama):
+
+```bash
+docker run -it \
+    --rm \
+    --name ollama \
+    -v ollama:/root/.ollama \
+    -p 11434:11434 \
+    ollama/ollama
+```
+
+When we run it, we need to log in to the container to download
+the phi3 model:
+
+```bash
+docker exec -it ollama bash
+
+ollama pull phi3
+```
+
+After pulling the model, we can query it with OpenAI's python package. Because we do volume mapping, the model files will
+stay in the container across multiple runs.
+
+Let's now combine them into one docker-compose file. 
+
+Create a [`docker-compose.yaml`](docker-compose.yaml) file with both Ollama and Elasticsearch.
+
+And now run it:
+
+```bash
+docker-compose up
+```
+
+## HuggingFace Hub
+
+Ollama can run locally on a CPU. But there are many models 
+that require a GPU.
+
+For running them, we will use Colab or other notebook platform with a GPU (for example, SaturnCloud). Let's stop our codespace
+for now.
+
+In Colab, you need to enable GPU:
 
