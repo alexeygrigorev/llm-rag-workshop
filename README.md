@@ -622,8 +622,11 @@ Installing for other OS - check the [Ollama website](https://www.ollama.com/down
 Let's run it:
 
 ```bash
+# in one terminal
 ollama start
-ollama serve phi3
+
+# in another terminal
+ollama run phi3
 ```
 
 Prompt example:
