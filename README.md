@@ -12,9 +12,9 @@ For this workshop, you need:
 
 - Docker
 - Python 3 (we use 3.10)
-- OpenAI account (optional)
-- GitHub account (optional)
-- HuggingFace account (optional)
+- GitHub account + VS Code (optional - if you want to use codespaces, already contains Docker and Python)
+- OpenAI account (optional - possible to replace with a local LLM)
+- HuggingFace account (optional - if you want to access some open-source LLMs in the extended version)
 
 
 # Plan
