@@ -87,7 +87,7 @@ pip install pipenv
 Install the packages:
 
 ```bash
-pipenv install tqdm notebook==7.1.2 openai elasticsearch
+pipenv install tqdm jupyter openai elasticsearch
 ```
 
 If you use OpenAI, we need the key:
@@ -103,7 +103,9 @@ Let's put the key to an env variable:
 export OPENAI_API_KEY="TOKEN"
 ```
 
-But a better way for managing keys is using direnv:
+You can also use [GitHub Codespaces secrets](https://docs.github.com/en/codespaces/managing-your-codespaces/managing-your-account-specific-secrets-for-github-codespaces#adding-a-secret) for better secret management.
+
+If you don't use codespaces, you can do it with direnv:
 
 ```bash
 sudo apt update
@@ -137,19 +139,6 @@ pipenv run jupyter notebook
 ```
 
 In another terminal, run elasticsearch with docker:
-
-```bash
-docker run -it \
-    --rm \
-    --name elasticsearch \
-    -p 9200:9200 \
-    -p 9300:9300 \
-    -e "discovery.type=single-node" \
-    -e "xpack.security.enabled=false" \
-    docker.elastic.co/elasticsearch/elasticsearch:8.4.3
-```
-
-If you get "Elasticsearch has quit unexpectedly", give it more RAM:
 
 ```bash
 docker run -it \
