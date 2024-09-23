@@ -76,18 +76,10 @@ In codespaces:
 * Create a repository, e.g. "llm-zoomcamp-rag-workshop"
 * Start a codespace there
 
-We will use pipenv for dependency management. It's optional but strongly recommended if you're doing the workshop locally, and not on codespaces.
-
-Let's install it: 
-
-```bash
-pip install pipenv
-```
-
 Install the packages:
 
 ```bash
-pipenv install tqdm jupyter openai elasticsearch
+pip install tqdm jupyter openai elasticsearch
 ```
 
 If you use OpenAI, we need the key:
@@ -135,7 +127,7 @@ Start a new terminal, and there run jupyter:
 
 
 ```bash
-pipenv run jupyter notebook
+jupyter notebook
 ```
 
 In another terminal, run elasticsearch with docker:
