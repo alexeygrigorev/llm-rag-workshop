@@ -2,7 +2,7 @@
 
 Chat with your own data - LLM+RAG workshop
 
-The content here is based on [LLM Zoomcamp](https://github.com/DataTalksClub/llm-zoomcamp) - a free course about the engineering aspects of LLMs. The course just started, you can still enroll. 
+The content here is based on [LLM Zoomcamp](https://github.com/DataTalksClub/llm-zoomcamp) - a free course about the engineering aspects of LLMs. We will run the course again in Spring-Summer 2025. Sign up if you're interested in attending it. 
 
 If you want to run a similar workshop in your company, contact
 me at alexey@datatalks.club.
@@ -11,10 +11,11 @@ me at alexey@datatalks.club.
 For this workshop, you need:
 
 - Docker
-- Python 3 (we use 3.10)
-- GitHub account + VS Code (optional - if you want to use codespaces, already contains Docker and Python)
-- OpenAI account (optional - possible to replace with a local LLM)
-- HuggingFace account (optional - if you want to access some open-source LLMs in the extended version)
+- Python 3 (we use 3.12)
+- [GitHub account](https://github.com/) + VS Code (optional - if you want to use codespaces, already contains Docker and Python)
+- [OpenAI account](https://openai.com/) (optional)
+- [Groq account](https://groq.com/) (optional) 
+- [HuggingFace account](https://huggingface.co/) (optional - if you want to access some open-source LLMs in the extended version)
 
 
 # Plan
@@ -33,6 +34,10 @@ Extended workshop:
     * Replacing OpenAI with Ollama
     * Running Ollama and ElasticSearch in Docker-Compose
 * Using Open-Source LLMs from HuggingFace Hub
+
+Or
+
+* Evaluating retrieval and RAG
 
 
 # LLM and RAG
@@ -76,11 +81,22 @@ In codespaces:
 * Create a repository, e.g. "llm-zoomcamp-rag-workshop"
 * Start a codespace there
 
+## Libraries 
+
 Install the packages:
 
 ```bash
 pip install tqdm jupyter openai elasticsearch
 ```
+
+
+if you use groq:
+
+```bash
+pip install groq
+```
+
+## LLM services
 
 If you use OpenAI, we need the key:
 
@@ -94,6 +110,15 @@ Let's put the key to an env variable:
 ```bash
 export OPENAI_API_KEY="TOKEN"
 ```
+
+For groq:
+
+* Sign up at https://console.groq.com/
+* Go to https://console.groq.com/keys
+* Create a new key, copy it
+* Use the `GROQ_API_KEY` env variable 
+
+## Managing secrets
 
 You can also use [GitHub Codespaces secrets](https://docs.github.com/en/codespaces/managing-your-codespaces/managing-your-account-specific-secrets-for-github-codespaces#adding-a-secret) for better secret management.
 
@@ -111,6 +136,12 @@ Create / edit `.envrc` in your project directory:
 export OPENAI_API_KEY='sk-proj-key'
 ```
 
+or
+
+```bash
+export GROQ_API_KEY='your-key'
+```
+
 Make sure `.envrc` is in your `.gitignore` - never commit it!
 
 ```bash
@@ -123,12 +154,15 @@ Allow direnv to run:
 direnv allow
 ```
 
-Start a new terminal, and there run jupyter:
+## Jupyter
 
+Start a new terminal, and there run jupyter:
 
 ```bash
 jupyter notebook
 ```
+
+## Elasticsearch
 
 In another terminal, run elasticsearch with docker:
 
@@ -368,6 +402,23 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
+## Groq
+
+With groq it's almost the same:
+
+```python
+from groq import Groq
+
+client = Groq()
+
+response = client.chat.completions.create(
+    model="llama3-8b-8192",
+    messages=[{"role": "user", "content": "The course already started. Can I still join?"}]
+)
+print(response.choices[0].message.content)
+```
+
+
 ## Building a Prompt
 
 Now let's build a prompt. First, we put all the 
@@ -418,6 +469,8 @@ response = client.chat.completions.create(
 answer = response.choices[0].message.content
 answer
 ```
+
+(Replace with `llama3-8b-8192` if using groq)
 
 Note: there are system and user prompts, we can also experiment with them to make the design of the prompt cleaner.
 
@@ -471,6 +524,8 @@ def ask_openai(prompt, model="gpt-4o"):
     )
     answer = response.choices[0].message.content
     return answer
+
+# use ask_groq and model="llama3-8b-8192" if using groq
 
 def qa_bot(user_question):
     context_docs = retrieve_documents(user_question)
@@ -719,7 +774,7 @@ Also, it's tricky to run Elasticsearch on Colab, so we will replace
 it with [minsearch](https://github.com/alexeygrigorev/minsearch) - a simple in-memory search library:
 
 ```
-!wget https://raw.githubusercontent.com/alexeygrigorev/minsearch/main/minsearch.py
+!pip install minsearch
 ```
 
 Let's get the data and create an index:
@@ -895,6 +950,69 @@ Other models:
 * `microsoft/Phi-3-mini-128k-instruct`
 * `mistralai/Mistral-7B-v0.1`
 * And many more
+
+
+# Alternative - evaluation
+
+## Retrieval evaluation 
+
+Using hitrate to evaluate 
+
+First, we generate ground truth data ([notebook](https://github.com/DataTalksClub/llm-zoomcamp/blob/main/03-vector-search/eval/ground-truth-data.ipynb)) (also [add ID to documents](https://github.com/DataTalksClub/llm-zoomcamp/blob/main/03-vector-search/eval/documents-with-ids.json))
+
+```python
+prompt_template = """
+You emulate a student who's taking our course.
+Formulate 5 questions this student might ask based on a FAQ record. The record
+should contain the answer to the questions, and the questions should be complete and not too short.
+If possible, use as fewer words as possible from the record. 
+
+The record:
+
+section: {section}
+question: {question}
+answer: {text}
+
+Provide the output in parsable JSON without using code blocks:
+
+["question1", "question2", ..., "question5"]
+```
+
+Then [evaluate it](https://github.com/DataTalksClub/llm-zoomcamp/blob/main/03-vector-search/eval/evaluate-text.ipynb):
+
+
+```python
+relevance_total = []
+
+for q in tqdm(ground_truth):
+    doc_id = q['document']
+    results = elastic_search(query=q['question'], course=q['course'])
+    relevance = [d['id'] == doc_id for d in results]
+    relevance_total.append(relevance)
+```
+
+Metrics:
+
+```python
+def hit_rate(relevance_total):
+    cnt = 0
+
+    for line in relevance_total:
+        if True in line:
+            cnt = cnt + 1
+
+    return cnt / len(relevance_total)
+
+def mrr(relevance_total):
+    total_score = 0.0
+
+    for line in relevance_total:
+        for rank in range(len(line)):
+            if line[rank] == True:
+                total_score = total_score + 1 / (rank + 1)
+
+    return total_score / len(relevance_total)
+```
 
 
 # Conclusions
