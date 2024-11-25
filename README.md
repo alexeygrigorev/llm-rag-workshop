@@ -1014,6 +1014,71 @@ def mrr(relevance_total):
     return total_score / len(relevance_total)
 ```
 
+## Cosine
+
+Q->A->Q cosine similarity (see [here](https://github.com/DataTalksClub/llm-zoomcamp/blob/main/04-monitoring/offline-rag-evaluation.ipynb))
+
+```python
+from sentence_transformers import SentenceTransformer
+
+model_name = 'multi-qa-MiniLM-L6-cos-v1'
+model = SentenceTransformer(model_name)
+
+answer_orig = 'Yes, sessions are recorded if you miss one. Everything is recorded, allowing you to catch up on any missed content. Additionally, you can ask questions in advance for office hours and have them addressed during the live stream. You can also ask questions in Slack.'
+answer_llm = 'Everything is recorded, so you won’t miss anything. You will be able to ask your questions for office hours in advance and we will cover them during the live stream. Also, you can always ask questions in Slack.'
+
+v_llm = model.encode(answer_llm)
+v_orig = model.encode(answer_orig)
+
+v_llm.dot(v_orig)
+```
+
+## LLM as a Judge
+
+[See here for code](https://github.com/DataTalksClub/llm-zoomcamp/blob/main/04-monitoring/offline-rag-evaluation.ipynb)
+
+```python
+prompt1_template = """
+You are an expert evaluator for a Retrieval-Augmented Generation (RAG) system.
+Your task is to analyze the relevance of the generated answer compared to the original answer provided.
+Based on the relevance and similarity of the generated answer to the original answer, you will classify
+it as "NON_RELEVANT", "PARTLY_RELEVANT", or "RELEVANT".
+
+Here is the data for evaluation:
+
+Original Answer: {answer_orig}
+Generated Question: {question}
+Generated Answer: {answer_llm}
+
+Please analyze the content and context of the generated answer in relation to the original
+answer and provide your evaluation in parsable JSON without using code blocks:
+
+{{
+  "Relevance": "NON_RELEVANT" | "PARTLY_RELEVANT" | "RELEVANT",
+  "Explanation": "[Provide a brief explanation for your evaluation]"
+}}
+""".strip()
+
+prompt2_template = """
+You are an expert evaluator for a Retrieval-Augmented Generation (RAG) system.
+Your task is to analyze the relevance of the generated answer to the given question.
+Based on the relevance of the generated answer, you will classify it
+as "NON_RELEVANT", "PARTLY_RELEVANT", or "RELEVANT".
+
+Here is the data for evaluation:
+
+Question: {question}
+Generated Answer: {answer_llm}
+
+Please analyze the content and context of the generated answer in relation to the question
+and provide your evaluation in parsable JSON without using code blocks:
+
+{{
+  "Relevance": "NON_RELEVANT" | "PARTLY_RELEVANT" | "RELEVANT",
+  "Explanation": "[Provide a brief explanation for your evaluation]"
+}}
+""".strip()
+```
 
 # Conclusions
 
