@@ -978,6 +978,11 @@ Provide the output in parsable JSON without using code blocks:
 ["question1", "question2", ..., "question5"]
 ```
 
+```
+wget https://github.com/DataTalksClub/llm-zoomcamp/blob/main/03-vector-search/eval/ground-truth-data.csv?raw=1
+mv ground-truth-data.csv?raw=1 ground-truth-data.csv
+```
+
 Then [evaluate it](https://github.com/DataTalksClub/llm-zoomcamp/blob/main/03-vector-search/eval/evaluate-text.ipynb):
 
 
