@@ -1,5 +1,7 @@
 # LLM RAG Workshop
 
+RAG - https://github.com/alexeygrigorev/mlconf-llm-rag-workshop/blob/main/rag.py
+
 Chat with your own data - LLM+RAG workshop
 
 The content here is based on [LLM Zoomcamp](https://github.com/DataTalksClub/llm-zoomcamp) - a free course about the engineering aspects of LLMs. We will run the course again in Spring-Summer 2025. Sign up if you're interested in attending it. 
